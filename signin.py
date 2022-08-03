@@ -1,9 +1,14 @@
 from typing import Union
-
 from fastapi import FastAPI
 from pydantic import BaseModel
-
 import httpx
+
+
+# "authTicket": {
+#     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwiZW1haWwiOiJ0YXNrQHRyeXZpdGFsLmlvIiwiYyI6MSwicyI6Imx2IiwiZXhwIjoxNjU5NTU4ODE2fQ.s9gpq93xiJBhVIIjRuz__RaeGvSJCD2b7-BbITTP_T4",
+#     "expires": 1659558816,
+#     "duration": 3600000
+# }
 
 
 app = FastAPI()
@@ -29,17 +34,23 @@ async def sign_in_user(creds: SignInObject):
     # AWAIT STEP 2
     # sign in with the email, password, & bearerToken from the above endpoint
     async with httpx.AsyncClient() as client:
-        callback_url = "https://api-eu.libreview.io/auth/signin"
-        response = await client.post(callback_url, data={"email":creds.email, "password":creds.password, "fingerprint":"2,(Macintosh),Mozilla/(Macintosh;IntelMacOSX;rv:)Gecko/Firefox/,Intel(R)HDGraphics400,America/New_York,5,MacIntel,en-US,en-US,en,4,"})
-        print(response.json())
+        callback_url = "https://api-eu.libreview.io/auth/login"
+        loginResponse = await client.post(callback_url, data={"email":creds.email, "password":creds.password})
+        bearerToken = loginResponse.data.authTicket
+        verify = loginResponse.step
+        # print(response.json())
 
     # IF the user is not remembered (needs confirmation token)
+    
+    #  if verify.type == "2faVerify"
+    # email is verify.props.secondaryValue
     
     # generate the access token to be sent to the email
     # async with httpx.AsyncClient() as client:
     #     callback_url = "https://api-eu.libreview.io/auth/continue/2fa/sendcode"
-    #     response = await client.post(callback_url)
-    #     print(response.json())
+    #     sendCodeResponse = await client.post(callback_url)
+    #     # this generates a NEW bearerToken as well
+    #     bearerToken = sendCodeResponse.ticket.token
     
     # return here & tell the user to call the endpoint to send the code to libreview
     
@@ -52,8 +63,10 @@ async def sign_in_user(creds: SignInObject):
     # send that code to the api
     # async with httpx.AsyncClient() as client:
     #     callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
-    #     response = await client.post(callback_url)
-    #     print(response.json())
+    #     resultCodeResponse = await client.post(callback_url)
+    #     # this generates a NEW bearerToken as well
+    #     bearerToken = resultCodeResponse.authTicket.token
+    #     userId = resultCodeResponse.data.user.id
     
     # with this response, you should properly be able to get the user data
     
