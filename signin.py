@@ -1,56 +1,54 @@
 from typing import Union
+
 from fastapi import FastAPI
 from pydantic import BaseModel
+
 import httpx
+
+
 app = FastAPI()
 
-    # to my understanding, this is the flow
-    #   call the /{patientId}/export ENDPOINT
-    #       -> that TAKES a Captcha parameter 
-    #       * i need to figure out a way to get past this *
-    #   the /export endpoint will a hub-eu endpoint
-    #   call that hub-eu endpoint, it will return 2 links
-    #       -> a wss that is a secure web portal (I don't think i need that)
-    #       -> a link to their aws with the query parameters already filled in
-    #   call that aws endpoint -> i'll get the data I need
-    #       -> store that data in my sqlite database
-    #   
-    
+class SignInObject(BaseModel):
+    email: str
+    password: str
 
-# this takes in a type-glucose & captchaResponse & patientId
-@app.post("/generate-data")
-async def generate_data(type:str, captchaResponse: str, patientId: str):
     
-
+# sign in function that will pass take a username & password & send it to 
+# LibreView
+@app.post("/signin")
+async def sign_in_user(creds: SignInObject):
+    
     # AWAIT STEP 1
-    # call the export endpoint to 
+    # get the bearerToken by calling the config endpoint 
+    # pass in the country GB
     # async with httpx.AsyncClient() as client:
-    #     callback_url = "https://api-eu.libreview.io/patients/{patientId}/export"
-    #     exportResponse = await client.post(callback_url, data={"type":type,"captchaResponse":captchaResponse})
-
+    #     callback_url = "https://api-eu.libreview.io/config"
+    #     response = await client.post(callback_url, data={"country":"GB"})
+    #     print(response.json())
     
     # AWAIT STEP 2
-    # the export endpoint will return an endpoint that is hub-eu -> call that 
-    # async with httpx.AsyncClient() as client:
-    #     callback_url = exportResponse.url
-    #     hubResponse = await client.get(callback_url})
+    # sign in with the email, password, & bearerToken from the above endpoint
+    async with httpx.AsyncClient() as client:
+        callback_url = "https://api-eu.libreview.io/auth/signin"
+        response = await client.post(callback_url, data={"email":creds.email, "password":creds.password, "fingerprint":"2,(Macintosh),Mozilla/(Macintosh;IntelMacOSX;rv:)Gecko/Firefox/,Intel(R)HDGraphics400,America/New_York,5,MacIntel,en-US,en-US,en,4,"})
+        print(response.json())
 
-    # AWAIT STEP 3
-    # the export endpoint will return an an aws endpoint -> call that 
-    # async with httpx.AsyncClient() as client:
-    #     callback_url = hubResponse.ld
-    #     awsResponse = await client.get(callback_url})
+    # IF the user is not remembered (needs confirmation token)
     
-    #  the awsResponse will be a large batch of data 
-    #  store this data in a sqlite database 
+    # generate the access token to be sent to the email
+    # async with httpx.AsyncClient() as client:
+    #     callback_url = "https://api-eu.libreview.io/auth/continue/2fa/sendcode"
+    #     response = await client.post(callback_url)
+    #     print(response.json())
+    
+    # return here & tell the user to call the endpoint to send the code to libreview
     
     
 
 
     return {"data": creds}
     
-# ENDPOINT to generate a proper captchaResponse
-# not entirely sure how to do that atm
+# ENDPOINT to submit the confirmation code & get the bearerToken 
     # send that code to the api
     # async with httpx.AsyncClient() as client:
     #     callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
