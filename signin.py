@@ -4,18 +4,16 @@ from pydantic import BaseModel
 import httpx
 
 
-# "authTicket": {
-#     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwiZW1haWwiOiJ0YXNrQHRyeXZpdGFsLmlvIiwiYyI6MSwicyI6Imx2IiwiZXhwIjoxNjU5NTU4ODE2fQ.s9gpq93xiJBhVIIjRuz__RaeGvSJCD2b7-BbITTP_T4",
-#     "expires": 1659558816,
-#     "duration": 3600000
-# }
-
-
-app = FastAPI()
+# async await for api reqs
+client = httpx.AsyncClient(verify=False)
 
 class SignInObject(BaseModel):
     email: str
     password: str
+    
+class EnterCodeObject(BaseModel):
+    accessCode: int
+    bearerToken: str
 
     
 # sign in function that will pass take a username & password & send it to 
@@ -23,50 +21,114 @@ class SignInObject(BaseModel):
 @app.post("/signin")
 async def sign_in_user(creds: SignInObject):
     
-    # AWAIT STEP 1
-    # get the bearerToken by calling the config endpoint 
-    # pass in the country GB
-    # async with httpx.AsyncClient() as client:
-    #     callback_url = "https://api-eu.libreview.io/config"
-    #     response = await client.post(callback_url, data={"country":"GB"})
-    #     print(response.json())
-    
-    # AWAIT STEP 2
-    # sign in with the email, password, & bearerToken from the above endpoint
-    async with httpx.AsyncClient() as client:
+    # may need to call this func to set to gb
+    # callback_url = "https://api-eu.libreview.io/config"
+        
+    # create body object
+    signInBody={
+        "Country":"GB",
+        "email": creds.email,
+        "password": creds.password
+        }
+    # convert to json
+    jsonData = json.dumps(signInBody)
+
+    try:
+        headers = {"Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
         callback_url = "https://api-eu.libreview.io/auth/login"
-        loginResponse = await client.post(callback_url, data={"email":creds.email, "password":creds.password})
-        bearerToken = loginResponse.data.authTicket
-        verify = loginResponse.step
-        # print(response.json())
+        initialSignIn = await client.post(callback_url, data=jsonData, headers=headers)
+        loginResponse = initialSignIn.json()
+        bearerToken = loginResponse["data"]["authTicket"]
+        verify = loginResponse["step"]
+        print(loginResponse)
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {initialSignIn.content} while requesting {callback_url}." }
 
     # IF the user is not remembered (needs confirmation token)
     
-    #  if verify.type == "2faVerify"
-    # email is verify.props.secondaryValue
-    
-    # generate the access token to be sent to the email
-    # async with httpx.AsyncClient() as client:
-    #     callback_url = "https://api-eu.libreview.io/auth/continue/2fa/sendcode"
-    #     sendCodeResponse = await client.post(callback_url)
-    #     # this generates a NEW bearerToken as well
-    #     bearerToken = sendCodeResponse.ticket.token
-    
+    if verify["type"] == "2faVerify":
+        # create body object
+        verifyObject={
+            "isPrimaryMethod":False
+            }
+        # convert to json
+        jsonData = json.dumps(verifyObject)
+        try:
+            # generate the access token to be sent to the email
+            headers = {'Authorization': 'Bearer ' + bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
+            callback_url = "https://api-eu.libreview.io/auth/continue/2fa/sendcode"
+            generateCode = await client.post(callback_url, data=jsonData, headers=headers)
+            sendCodeResponse = generateCode.json()
+            # this generates a NEW bearerToken as well
+            bearerToken = sendCodeResponse["ticket"]["token"]
+            print(sendCodeResponse)
+        except httpx.RequestError as exc:
+            return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+        except httpx.HTTPStatusError as exc:
+            return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+        except:
+            return {"error": f"Error response {generateCode.content} while requesting {callback_url}." }
+        
     # return here & tell the user to call the endpoint to send the code to libreview
+
+    return {"data": f"call the /enter-code endpoint & in the body pass the code & bearerToken {bearerToken}"}
     
+# sign in function that will pass take a username & password & send it to 
+# LibreView
+@app.post("/enter-code")
+async def sign_in_user(token: EnterCodeObject):
     
+    # may need to call this func to set to gb
+    # callback_url = "https://api-eu.libreview.io/config"
+        
+    # create body object
+    verifyObject={
+        "isPrimaryMethod": False,
+        "code": token.accessCode
+        }
+    # convert to json
+    jsonData = json.dumps(verifyObject)
+
+    try:
+        headers = {'Authorization': 'Bearer ' + token.bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
+        callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
+        finalSignIn = await client.post(callback_url, data=jsonData, headers=headers)
+        loginResponse = finalSignIn.json()
+        bearerToken = loginResponse["data"]["authTicket"]["token"]
+        professionalId = loginResponse["data"]["user"]["id"]
+        print(loginResponse)
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {initialSignIn.content} while requesting {callback_url}." }
+
+
+    # call /dashboard to get the patientIds & information 
+    try:
+        headers = {'Authorization': 'Bearer ' + bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
+        callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
+        dashboardData = await client.post(callback_url, headers=headers)
+        dashboardResponse = dashboardData.json()
+        # get patient info
+        patients = dashboardResponse["data"]["results"]
+        patientIds = []
+        # iterate thru & collect all patient ids
+        for patient in patients:
+            patientIds.append(patient["id"])
+        print(dashboardResponse)
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {initialSignIn.content} while requesting {callback_url}." }
+
 
 
     return {"data": creds}
-    
-# ENDPOINT to submit the confirmation code & get the bearerToken 
-    # send that code to the api
-    # async with httpx.AsyncClient() as client:
-    #     callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
-    #     resultCodeResponse = await client.post(callback_url)
-    #     # this generates a NEW bearerToken as well
-    #     bearerToken = resultCodeResponse.authTicket.token
-    #     userId = resultCodeResponse.data.user.id
-    
-    # with this response, you should properly be able to get the user data
-    
