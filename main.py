@@ -1,14 +1,13 @@
 from typing import Union
-
 from fastapi import FastAPI
 from pydantic import BaseModel, BaseSettings
-import json
-import xmltojson
+
+# for async await http resquests
 import httpx
-import ast
 
+# for converting html response to actual variable values
 from bs4 import BeautifulSoup
-
+import json
 import re
 
 class Token(BaseSettings):
@@ -46,7 +45,6 @@ async def get_glucose(start_date: str = "", end_date: str = ""):
     # search data pool based on parameters passed in
     await query_libre(1650052354, 1650326400)
 
-    # sanitize the data & put in desired JSON object to return
     
     data = start_date + end_date
     return {"data": data}
@@ -126,45 +124,19 @@ async def query_libre(start_date: int, end_date: int):
     # the endpoint takes a query parameter as the bearerToken
     dataInJavascriptFile = await client.get(properReportUrl+"?session="+bearerToken, headers=headers)
     print("made it to js file")
-    # print(dataInJavascriptFile.text)
-
-    
 
     
     # parse html response 
     soup = BeautifulSoup(dataInJavascriptFile.text, 'lxml')
     # get correct script tag
     rows = soup.head.findAll('script')[4::5]
-    # print(rows)
     scriptTag = str(rows[1])
-    # print(scriptTag)
+    # search the script tag for the variable 'window.Report'
     search = re.search(r'window.Report = ([\s\S]+)?',scriptTag).group(1)
     # must remove the closing script tag
     completeObject = search.replace("</script>","").replace(";","")
-    print(completeObject)
-    object = ast.literal_eval(completeObject)
-    # print()
-    # search = re.compile('window.AssetURL = ([\s\S]+)?')
-    # report = search.match(scriptTag)
-    # print(report)
-    # Save the page content as sample.html
-    # with open("sample.html", "w") as html_file:
-    #     html_file.write(dataInJavascriptFile.text)
-    #     print("wrote")
-    # 
-    # with open("sample.html", "r") as html_file:
-    #     html = html_file.read()
-    #     print("read")
-    #     gaid = re.search(r"window.Report = '(.*?)'", html)
-    #     print(gaid)
-        
-        # json_ = xmltojson.parse(html)
-        # print("parsed")
-      
-    # with open("data.json", "w") as file:
-    #     json.dump(json_, file)
-    #     print("dumped")
+    # convert the string into json
+    object = json.loads(completeObject)
     
-    # the data is in this return data, must parse
-    properReportUrl = dataInJavascriptFile
-
+    # now iterate through Data.Days & get all the glucose data
+    print(object["Data"]["Days"])
