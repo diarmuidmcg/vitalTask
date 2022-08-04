@@ -55,6 +55,7 @@ Corners I cut:
   helperfunctions.py
   However, I'm not entirely sure if separating routes from code is a common thing with FastAPI
 - Storing database in just a db file (& not using a .env file to store its name)
+- I would have extensive tests on all endpoints, especially storing the username & password as ENV variables and querying /signin
 
 What I learned throughout this challenge
 
