@@ -130,5 +130,18 @@ async def sign_in_user(token: EnterCodeObject):
         return {"error": f"Error response {initialSignIn.content} while requesting {callback_url}." }
 
 
+    # for each patient, add their information to the db
+    
+    # get last 6 months of data
+    # calc the date today in epoch
+    todayDate = int(time.time())
+    # 1 month = 2629743
+    # 1 month x 6
+    differenceInMonths = int(2629743 * 6)
+    startDate = todayDate - differenceInMonths
+    
+    for patient in patientIds:
+        await query_libre(startDate,todayDate,bearerToken,patient,professionalId)
+        print("got data for patient " + patient)
 
     return {"data": creds}
