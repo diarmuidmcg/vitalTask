@@ -1,14 +1,25 @@
 from typing import Union
 
 from fastapi import FastAPI
-from pydantic import BaseModel
-
+from pydantic import BaseModel, BaseSettings
+import json
+import xmltojson
 import httpx
+import ast
+
+from bs4 import BeautifulSoup
+
+import re
+
+class Token(BaseSettings):
+    bearerToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTU3ODQxM30.FCy_wkjIUjpj6gC10UxQvxPXM8YNmAG2knC6T4EyORE"
 
 
 app = FastAPI()
 
-bearerToken = ""
+client = httpx.AsyncClient(verify=False)
+
+# bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTU3ODQxM30.FCy_wkjIUjpj6gC10UxQvxPXM8YNmAG2knC6T4EyORE"
 
 # GLOBAL VARS
 patientId = "3f5e19e1-d667-11ea-a179-0242ac110007"
@@ -22,8 +33,8 @@ async def get_glucose(start_date: str = "", end_date: str = ""):
         # if not, prompt user to call /signin endpoint
     
     # ensure params includes
-    if not start_date or not end_date:
-        return {"error": "You did not pass in the correct parameters"}
+    # if not start_date or not end_date:
+    #     return {"error": "You did not pass in the correct parameters"}
     # validate that the start date & end date are the proper YYYY-MM-DD format
     # and that they are all valid numbers / years
     
@@ -33,6 +44,7 @@ async def get_glucose(start_date: str = "", end_date: str = ""):
     
     
     # search data pool based on parameters passed in
+    await query_libre(1650052354, 1650326400)
 
     # sanitize the data & put in desired JSON object to return
     
@@ -40,7 +52,9 @@ async def get_glucose(start_date: str = "", end_date: str = ""):
     return {"data": data}
     
 async def query_libre(start_date: int, end_date: int):
-    
+    bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTU3ODQxM30.FCy_wkjIUjpj6gC10UxQvxPXM8YNmAG2knC6T4EyORE"
+
+    print("i got here")
     # calc the date today in epoch
     todayDate = 1659484800
     
@@ -56,52 +70,101 @@ async def query_libre(start_date: int, end_date: int):
         "LowGlucoseThreshold":2.8,
         "PrimaryDeviceId":"9ce4ef20-b9c1-11ec-b614-0242ac11000b",
         "PrimaryDeviceTypeId":40066,
-        "PrintReportsWithPatientInformation":false,
+        "PrintReportsWithPatientInformation":False,
         "ReportIds":[540066],
         "SecondaryDeviceIds":["0bebe0fc-2b58-11ec-895a-0242ac110005","63055cd4-f7b2-11eb-951b-0242ac110002","67ccf8be-e63a-11eb-a26e-0242ac110002","3c41cd72-e633-11eb-a26e-0242ac110002","93b9f4f0-e5c2-11eb-951b-0242ac110002","baa36267-d66f-11ea-8740-0242ac110003"],
-        "TertiaryDeviceIds":[],
-        "ConnectedInsulinDeviceIds":[],
         "StartDates":[start_date],
         "TargetRangeHigh":10,
         "TargetRangeLow":3.8,
         "TimeFormat":2,
         "TodayDate":todayDate,
-        "PatientDateOfBirth":745632000,
         "PatientId":patientId,
         "ProfessionalId":professionalId,
         "ClientReportIDs":[5]
         }
+    jsonData = json.dumps(postReportData)
+    print("i even got here")
     # POST 
     # This generates the overall report
-    async with httpx.AsyncClient() as client:
-        callback_url = "https://api-eu.libreview.io/reports"
-        postReport = await client.post(callback_url, data=postReportData)
-        bearerToken = postReport.ticket.token
-        # this url is the next endpoint to call
-        channelUrl = postReport.data.url
-        # print(postReport.json())
+    
+    print("into async client")
+    headers = {'Authorization': 'Bearer ' + bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
+    # headers = {'Authorization': bearerToken}
+    callback_url = "https://api-eu.libreview.io/reports"
+    postReport = await client.post(callback_url, data=jsonData, headers=headers)
+    postReportJson = postReport.json()
+    print(postReportJson)
+    bearerToken = postReportJson["ticket"]["token"]
+    # this url is the next endpoint to call
+    channelUrl = postReportJson["data"]["url"]
+
         
     # GET 
     # This generates the link to retreive the data from numerous reports
-    async with httpx.AsyncClient() as client:
-        getChannel = await client.get(channelUrl)
-        # this url is the next endpoint to call
-        dataIpUrl = getChannel.data.lp
-        # print(getChannel.json())
+    
+    getChannel = await client.get(channelUrl, headers=headers)
+    getChannelJson = getChannel.json()
+    print(getChannelJson)
+    # this url is the next endpoint to call
+    dataIpUrl = getChannelJson["data"]["lp"]
+
         
     # GET 
     # This generates the links to those reports
-    async with httpx.AsyncClient() as client:
-        getReports = await client.get(dataIpUrl)
-        # this url is the next endpoint to call
-        properReportUrl = getReports.url["5"]
-        # print(getChannel.json())
+    
+    getReports = await client.get(dataIpUrl, headers=headers)
+    getReportsJson = getReports.json()
+    print(getReportsJson)
+    print("got to args url")
+    # this url is the next endpoint to call
+    properReportUrl = getReportsJson["args"]["urls"]["5"]
+    print("made it json")
         
     # GET 
     # This generates the final report as a file that contains the data
-    async with httpx.AsyncClient() as client:
-        # the endpoint takes a query parameter as the bearerToken
-        dataInJavascriptFile = await client.get(properReportUrl+"?session="+bearerToken)
-        # the data is in this return data, must parse
-        properReportUrl = dataInJavascriptFile
-        # print(getChannel.json())
+    
+    # the endpoint takes a query parameter as the bearerToken
+    dataInJavascriptFile = await client.get(properReportUrl+"?session="+bearerToken, headers=headers)
+    print("made it to js file")
+    # print(dataInJavascriptFile.text)
+
+    
+
+    
+    # parse html response 
+    soup = BeautifulSoup(dataInJavascriptFile.text, 'lxml')
+    # get correct script tag
+    rows = soup.head.findAll('script')[4::5]
+    # print(rows)
+    scriptTag = str(rows[1])
+    # print(scriptTag)
+    search = re.search(r'window.Report = ([\s\S]+)?',scriptTag).group(1)
+    # must remove the closing script tag
+    completeObject = search.replace("</script>","").replace(";","")
+    print(completeObject)
+    object = ast.literal_eval(completeObject)
+    # print()
+    # search = re.compile('window.AssetURL = ([\s\S]+)?')
+    # report = search.match(scriptTag)
+    # print(report)
+    # Save the page content as sample.html
+    # with open("sample.html", "w") as html_file:
+    #     html_file.write(dataInJavascriptFile.text)
+    #     print("wrote")
+    # 
+    # with open("sample.html", "r") as html_file:
+    #     html = html_file.read()
+    #     print("read")
+    #     gaid = re.search(r"window.Report = '(.*?)'", html)
+    #     print(gaid)
+        
+        # json_ = xmltojson.parse(html)
+        # print("parsed")
+      
+    # with open("data.json", "w") as file:
+    #     json.dump(json_, file)
+    #     print("dumped")
+    
+    # the data is in this return data, must parse
+    properReportUrl = dataInJavascriptFile
+
