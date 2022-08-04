@@ -58,6 +58,10 @@ async def get_glucose(start_date: str, end_date: str):
     with Session(engine) as session:
         statement = select(GlucoseDataPoint).where(GlucoseDataPoint.timestamp > epochStart).where(GlucoseDataPoint.timestamp < epochEnd)
         glucose = session.exec(statement).all()
+        
+    # if no data is returned, prompt the user to change the parameters
+    if len(glucose) == 0:
+        return {"data": "No data was returned, try changing your parameters"}
     # return those datapoints
     return {"data": glucose}
     
