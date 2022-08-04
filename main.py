@@ -18,6 +18,13 @@ def validate(date_text):
     except ValueError:
         raise ValueError("Incorrect data format, should be YYYY-MM-DD")
 
+
+class GlucoseDataPoint:
+    def __init__(self, timestamp, value):
+        self.timestamp = timestamp
+        self.value = value
+
+
 app = FastAPI()
 # async await for api reqs
 client = httpx.AsyncClient(verify=False)
@@ -175,10 +182,13 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
             for dataGroup in day["Glucose"]:
                 # this is each individial piece of data
                 for dataPoint in dataGroup:
-                    glucoseData.append(dataPoint)
+                    glucose = GlucoseDataPoint(dataPoint["Timestamp"],dataPoint["Value"])
+                    glucoseData.append(glucose)
     except:
         return {"error": "there was an issue parsing the data returned from the api"}
         
+    # allGlucose = db.GqlQuery("SELECT *", 100)
+
     return glucoseData
 
 
