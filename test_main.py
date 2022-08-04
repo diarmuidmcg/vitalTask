@@ -4,6 +4,7 @@ from main import app
 
 client = TestClient(app)
 
+# ---------------------------------- GLUCOSE TESTS -----------------------------------
 def test_get_glucose_valid():
     response = client.get("/glucose?start_date=2022-4-25&end_date=2022-4-26")
     assert response.status_code == 200
@@ -398,3 +399,32 @@ def test_get_glucose_wrong_end_date():
     response = client.get("/glucose?start_date=2021-10-12&end_date=202110-17")
     assert response.status_code == 200
     assert response.json() == {"error": "end date should be YYYY-MM-DD & a query parameter"}
+    
+# ---------------------------------- Sign in TESTS -----------------------------------
+def test_get_Sign_in_wrong_creds():
+    response = client.post(
+        "/signin",
+        headers = {"Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"},
+        json={
+            "Country":"GB",
+            "email": "email@email.com",
+            "password": "notARealPw"
+            },
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "error": "Error response b'{\"status\":2,\"error\":{\"message\":\"notAuthenticated\"}}\\n' while requesting https://api-eu.libreview.io/auth/login."
+    }
+    
+def test_get_Sign_in_no_creds():
+    response = client.post(
+        "/signin",
+        headers = {"Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"},
+        json={
+            "Country":"GB",
+            },
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+    {'detail': [{'loc': ['body', 'email'], 'msg': 'field required', 'type': 'value_error.missing'}, {'loc': ['body', 'password'], 'msg': 'field required', 'type': 'value_error.missing'}]} != {'detail': [{'loc': ['body'], 'msg': 'field required', 'type': 'value_error.missing'}]}
+    }
