@@ -7,8 +7,20 @@ to run:
 - install all packages
   - if theres a `pip3 install` like `npm i` then run that, otherwise
     `pip3 install typing fastapi pydantic httpx bs4 json re datetime time sqlmodel`
-
-Breakdown of solution:
+- run with `uvicorn main:app --reload`
+- with postman (or alternative) query
+  POST `http://127.0.0.1:8000/signin`
+  with {"email":"youremail","password":"yourPasssword"}
+  as Raw JSON BODY Params
+  -> will return a bearerToken
+- with bearerToken & code in email, query
+  POST `http://127.0.0.1:8000/enter-code`
+  with {"accessCode":"codeAsString","bearerToken":"yourBearerToken"}
+  as Raw JSON BODY Params
+- then you're free to query
+  GET `http://127.0.0.1:8000/glucose?start_date=10-12-2021&end_date=2022-4-26`
+  start_date & end_date are QUERY parameters
+  Breakdown of solution:
 
 - Pass the `email` & `password` BODY parameters into the POST /signin endpoint
   -> this calls the LibreView /login endpoint
