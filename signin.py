@@ -39,7 +39,6 @@ async def sign_in_user(creds: SignInObject):
         loginResponse = initialSignIn.json()
         bearerToken = loginResponse["data"]["authTicket"]["token"]
         verify = loginResponse["data"]["step"]
-        print(loginResponse)
     except httpx.RequestError as exc:
         return { "error": f"An error occurred while requesting {exc.request.url!r}." }
     except httpx.HTTPStatusError as exc:
@@ -88,8 +87,6 @@ async def enter_code(token: EnterCodeObject):
         }
     # convert to json
     jsonData = json.dumps(verifyObject)
-    print(token.bearerToken)
-    print(jsonData)
     try:
         headers = {'Authorization': 'Bearer ' + token.bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
         callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
@@ -97,7 +94,6 @@ async def enter_code(token: EnterCodeObject):
         loginResponse = finalSignIn.json()
         bearerToken = loginResponse["data"]["authTicket"]["token"]
         professionalId = loginResponse["data"]["user"]["id"]
-        print(loginResponse)
     except httpx.RequestError as exc:
         return { "error": f"An error occurred while requesting {exc.request.url!r}." }
     except httpx.HTTPStatusError as exc:
@@ -140,7 +136,6 @@ async def enter_code(token: EnterCodeObject):
         # iterate thru & collect all patient ids
         for patient in patients:
             patientIds.append(patient["id"])
-        print(dashboardResponse)
     except httpx.RequestError as exc:
         return { "error": f"An error occurred while requesting {exc.request.url!r}." }
     except httpx.HTTPStatusError as exc:

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 from fastapi import FastAPI
 from pydantic import BaseModel, BaseSettings
 # for async await http resquests
@@ -19,13 +19,21 @@ def validate(date_text):
         raise ValueError("Incorrect data format, should be YYYY-MM-DD")
 
 
-class GlucoseDataPoint:
-    def __init__(self, timestamp, value):
-        self.timestamp = timestamp
-        self.value = value
+# class GlucoseDataPoint:
+#     def __init__(self, timestamp, value):
+#         self.timestamp = timestamp
+#         self.value = value
+from sqlmodel import Field, Session, SQLModel, create_engine, select
 
+
+class GlucoseDataPoint(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    timestamp: int
+    value: float
+    
 
 app = FastAPI()
+
 # async await for api reqs
 client = httpx.AsyncClient(verify=False)
 
@@ -37,7 +45,7 @@ class GlucoseBody(BaseModel):
 
 # main function that'll return all the data requested from the data pool
 @app.get("/glucose")
-async def get_glucose(start_date: str, end_date: str, glucoseBody: GlucoseBody):
+async def get_glucose(start_date: str, end_date: str):
     
     # validate that the start date & end date are the proper YYYY-MM-DD format
     # and that they are all valid numbers / years
@@ -54,18 +62,24 @@ async def get_glucose(start_date: str, end_date: str, glucoseBody: GlucoseBody):
     # convert it to int to remove trailing 0 & decimal
     epochStart = int(datetime.datetime.strptime(start_date, "%Y-%m-%d").timestamp())
     epochEnd = int(datetime.datetime.strptime(end_date, "%Y-%m-%d").timestamp())
-    
+    print("Start " + str(epochStart))
+    print("End " + str(epochEnd))
     # validate the bearerToken isnt expired
     
     # ensure the data has been loaded
         # if not, prompt user to call the /generate-data endpoint 
     
-    
+    engine = create_engine("sqlite:///GlucoseData.db")
+
+    with Session(engine) as session:
+        statement = select(GlucoseDataPoint).where(GlucoseDataPoint.timestamp > epochStart).where(GlucoseDataPoint.timestamp < epochEnd)
+        glucose = session.exec(statement).all()
+        # print(glucose)
     # search data pool based on parameters passed in
-    data = await query_libre(epochStart, epochEnd, glucoseBody.bearerToken, glucoseBody.patientId, glucoseBody.professionalId)
+    # data = await query_libre(epochStart, epochEnd, glucoseBody.bearerToken, glucoseBody.patientId, glucoseBody.professionalId)
 
     # data = "testing"
-    return {"data": data}
+    return {"data": glucose}
     
 async def query_libre(start_date: int, end_date: int, bearerToken: str, patientId: str, professionalId: str):
     
@@ -173,8 +187,12 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
         # convert the string into json
         object = json.loads(completeObject)
         
+        # create the database
+        engine = create_engine("sqlite:///GlucoseData.db")
+        SQLModel.metadata.create_all(engine)
+        
         # now iterate through Data.Days & get all the glucose data
-        glucoseData = []
+        # glucoseData = []
         days = object["Data"]["Days"]
         # get each individial day
         for day in days:
@@ -182,14 +200,18 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
             for dataGroup in day["Glucose"]:
                 # this is each individial piece of data
                 for dataPoint in dataGroup:
-                    glucose = GlucoseDataPoint(dataPoint["Timestamp"],dataPoint["Value"])
-                    glucoseData.append(glucose)
+                    
+                    glucose = GlucoseDataPoint(timestamp=dataPoint["Timestamp"],value=dataPoint["Value"])
+                    with Session(engine) as session:
+                        session.add(glucose)
+                        session.commit()
+                    # glucoseData.append(glucose)
     except:
         return {"error": "there was an issue parsing the data returned from the api"}
 
 
 
-    return glucoseData
+    return {"data":"the data was successfully stored"}
 
 
 class SignInObject(BaseModel):
@@ -273,8 +295,6 @@ async def enter_code(token: EnterCodeObject):
         }
     # convert to json
     jsonData = json.dumps(verifyObject)
-    print(token.bearerToken)
-    print(jsonData)
     try:
         headers = {'Authorization': 'Bearer ' + token.bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
         callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
@@ -282,15 +302,12 @@ async def enter_code(token: EnterCodeObject):
         loginResponse = finalSignIn.json()
         bearerToken = loginResponse["data"]["authTicket"]["token"]
         professionalId = loginResponse["data"]["user"]["id"]
-        print(loginResponse)
     except httpx.RequestError as exc:
         return { "error": f"An error occurred while requesting {exc.request.url!r}." }
     except httpx.HTTPStatusError as exc:
         return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
     except:
         return {"error": f"Error response {finalSignIn.content} while requesting {callback_url}." }
-    
-
 
     dashboardObject={
         "filters":[],
@@ -325,7 +342,6 @@ async def enter_code(token: EnterCodeObject):
         # iterate thru & collect all patient ids
         for patient in patients:
             patientIds.append(patient["id"])
-        print(dashboardResponse)
     except httpx.RequestError as exc:
         return { "error": f"An error occurred while requesting {exc.request.url!r}." }
     except httpx.HTTPStatusError as exc:
