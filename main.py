@@ -1,7 +1,6 @@
 from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel, BaseSettings
-import jwt
 # for async await http resquests
 import httpx
 
@@ -100,54 +99,86 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
     headers = {'Authorization': 'Bearer ' + bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
     # headers = {'Authorization': bearerToken}
     callback_url = "https://api-eu.libreview.io/reports"
-    postReport = await client.post(callback_url, data=jsonData, headers=headers)
-    postReportJson = postReport.json()
-    # the token thats returned must be used as the session value for the last call
-    bearerToken = postReportJson["ticket"]["token"]
-    # this url is the next endpoint to call
-    channelUrl = postReportJson["data"]["url"]
+    try:
+        postReport = await client.post(callback_url, data=jsonData, headers=headers)
+        postReportJson = postReport.json()
+        # the token thats returned must be used as the session value for the last call
+        bearerToken = postReportJson["ticket"]["token"]
+        # this url is the next endpoint to call
+        channelUrl = postReportJson["data"]["url"]
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {postReport.content} while requesting {callback_url}." }
+    
 
     # GET 
     # This generates the link to retreive the data from numerous reports
-    getChannel = await client.get(channelUrl, headers=headers)
-    getChannelJson = getChannel.json()
-    # this url is the next endpoint to call
-    dataIpUrl = getChannelJson["data"]["lp"]
+    try:
+        getChannel = await client.get(channelUrl, headers=headers)
+        getChannelJson = getChannel.json()
+        # this url is the next endpoint to call
+        dataIpUrl = getChannelJson["data"]["lp"]
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {getChannel.content} while requesting {channelUrl}." }
+
 
     # GET 
     # This generates the links to those reports
-    getReports = await client.get(dataIpUrl, headers=headers)
-    getReportsJson = getReports.json()
-    # this url is the next endpoint to call
-    properReportUrl = getReportsJson["args"]["urls"]["5"]
+    try:
+        getReports = await client.get(dataIpUrl, headers=headers)
+        getReportsJson = getReports.json()
+        # this url is the next endpoint to call
+        properReportUrl = getReportsJson["args"]["urls"]["5"]
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {getReports.content} while requesting {dataIpUrl}." }
         
     # GET 
     # This generates the final report as a file that contains the data
     # the endpoint takes a query parameter as the bearerToken
-    dataInJavascriptFile = await client.get(properReportUrl+"?session="+bearerToken, headers=headers)
-
-    # parse html response 
-    soup = BeautifulSoup(dataInJavascriptFile.text, 'lxml')
-    # get correct script tag
-    rows = soup.head.findAll('script')[4::5]
-    scriptTag = str(rows[1])
-    # search the script tag for the variable 'window.Report'
-    search = re.search(r'window.Report = ([\s\S]+)?',scriptTag).group(1)
-    # must remove the closing script tag
-    completeObject = search.replace("</script>","").replace(";","")
-    # convert the string into json
-    object = json.loads(completeObject)
+    try:
+        dataInJavascriptFile = await client.get(properReportUrl+"?session="+bearerToken, headers=headers)
+    except httpx.RequestError as exc:
+        return { "error": f"An error occurred while requesting {exc.request.url!r}." }
+    except httpx.HTTPStatusError as exc:
+        return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
+    except:
+        return {"error": f"Error response {dataInJavascriptFile.content} while requesting {properReportUrl}." }
     
-    # now iterate through Data.Days & get all the glucose data
-    glucoseData = []
-    days = object["Data"]["Days"]
-    # get each individial day
-    for day in days:
-        # theres a second bracket before the glucose data
-        for dataGroup in day["Glucose"]:
-            # this is each individial piece of data
-            for dataPoint in dataGroup:
-                glucoseData.append(dataPoint)
-    
+    try:
+        # parse html response 
+        soup = BeautifulSoup(dataInJavascriptFile.text, 'lxml')
+        # get correct script tag
+        rows = soup.head.findAll('script')[4::5]
+        scriptTag = str(rows[1])
+        # search the script tag for the variable 'window.Report'
+        search = re.search(r'window.Report = ([\s\S]+)?',scriptTag).group(1)
+        # must remove the closing script tag
+        completeObject = search.replace("</script>","").replace(";","")
+        # convert the string into json
+        object = json.loads(completeObject)
+        
+        # now iterate through Data.Days & get all the glucose data
+        glucoseData = []
+        days = object["Data"]["Days"]
+        # get each individial day
+        for day in days:
+            # theres a second bracket before the glucose data
+            for dataGroup in day["Glucose"]:
+                # this is each individial piece of data
+                for dataPoint in dataGroup:
+                    glucoseData.append(dataPoint)
+    except:
+        return {"error": "there was an issue parsing the data returned from the api"}
     return glucoseData
     # print(glucoseData)
