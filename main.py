@@ -130,7 +130,7 @@ async def sign_in_user(creds: SignInObject):
         
     # return here & tell the user to call the endpoint to send the code to libreview
 
-    return {"data": f"call the /enter-code endpoint & in the body pass the code & bearerToken {bearerToken}"}
+    return {"data": "call the /enter-code endpoint & in the BODY pass the code & bearerToken","bearerToken":bearerToken}
     
 # sign in function that will pass take a username & password & send it to 
 # LibreView
