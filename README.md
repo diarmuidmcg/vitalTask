@@ -42,6 +42,7 @@ Corners I cut:
   controller.py
   helperfunctions.py
   However, I'm not entirely sure if separating routes from code is a common thing with FastAPI
+- Storing database in just a db file (& not using a .env file to store its name)
 
 What I learned throughout this challenge
 
@@ -52,6 +53,7 @@ What I learned throughout this challenge
   - httpx
 - Using a model to create a database table (I always just have an entity file for a backend)
 - Parsing HTML response into JSON & then eventually Python (basically webscraping)
+- Reverse engineering ANYTHING
 
 I list all that not because I want you to take it easy on me. I don't.
 I just want to demonstrate that I'm a fast learner!
