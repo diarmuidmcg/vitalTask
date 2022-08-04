@@ -10,15 +10,10 @@ from bs4 import BeautifulSoup
 import json
 import re
 
-class Token(BaseSettings):
-    bearerToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTU3ODQxM30.FCy_wkjIUjpj6gC10UxQvxPXM8YNmAG2knC6T4EyORE"
-
-
 app = FastAPI()
 
 client = httpx.AsyncClient(verify=False)
 
-# bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTU3ODQxM30.FCy_wkjIUjpj6gC10UxQvxPXM8YNmAG2knC6T4EyORE"
 
 # GLOBAL VARS
 patientId = "3f5e19e1-d667-11ea-a179-0242ac110007"
@@ -26,14 +21,17 @@ professionalId = "43dd94c6-fc1e-11eb-ba23-0242ac110004"
 
 # main function that'll return all the data requested from the data pool
 @app.get("/glucose")
-async def get_glucose(start_date: str = "", end_date: str = ""):
-    
+async def get_glucose(start_date: str = "", end_date: str = "", bearerToken: str = ""):
+    bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTYyMzQ4MH0.Kub6N4RgZ4GdKcBo4gDRvTeyGWr60-AXM86oDDjEm3c"
+
     # ensure signed in 
         # if not, prompt user to call /signin endpoint
     
     # ensure params includes
     # if not start_date or not end_date:
-    #     return {"error": "You did not pass in the correct parameters"}
+    #     return {"error": "You did not pass in the correct time parameters"}
+    # if not bearerToken:
+    #     return {"error": "You did not pass in a bearerToken"}
     # validate that the start date & end date are the proper YYYY-MM-DD format
     # and that they are all valid numbers / years
     
@@ -43,15 +41,13 @@ async def get_glucose(start_date: str = "", end_date: str = ""):
     
     
     # search data pool based on parameters passed in
-    await query_libre(1650052354, 1650326400)
+    data = await query_libre(1650052354, 1650326400, bearerToken)
 
     
-    data = start_date + end_date
     return {"data": data}
     
-async def query_libre(start_date: int, end_date: int):
-    bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTU3ODQxM30.FCy_wkjIUjpj6gC10UxQvxPXM8YNmAG2knC6T4EyORE"
-
+async def query_libre(start_date: int, end_date: int, bearerToken: str):
+    
     print("i got here")
     # calc the date today in epoch
     todayDate = 1659484800
@@ -139,4 +135,15 @@ async def query_libre(start_date: int, end_date: int):
     object = json.loads(completeObject)
     
     # now iterate through Data.Days & get all the glucose data
-    print(object["Data"]["Days"])
+    glucoseData = []
+    days = object["Data"]["Days"]
+    # get each individial day
+    for day in days:
+        # theres a second bracket before the glucose data
+        for dataGroup in day["Glucose"]:
+            # this is each individial piece of data
+            for dataPoint in dataGroup:
+                glucoseData.append(dataPoint)
+    
+    return glucoseData
+    # print(glucoseData)
