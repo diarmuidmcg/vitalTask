@@ -24,31 +24,29 @@ client = httpx.AsyncClient(verify=False)
 
 # body object for glucose api call
 class GlucoseBody(BaseModel):
-    start_date: str
-    end_date: str
     bearerToken: str
     patientId: str
     professionalId: str
 
 # main function that'll return all the data requested from the data pool
 @app.get("/glucose")
-async def get_glucose(glucoseBody: GlucoseBody):
+async def get_glucose(start_date: str, end_date: str, glucoseBody: GlucoseBody):
     
     # validate that the start date & end date are the proper YYYY-MM-DD format
     # and that they are all valid numbers / years
     try:
-        validate(glucoseBody.start_date)
+        validate(start_date)
     except:
-        return {"error": "state date should be YYYY-MM-DD"}
+        return {"error": "state date should be YYYY-MM-DD & a query parameter"}
     try:
-        validate(glucoseBody.end_date)
+        validate(end_date)
     except:
-        return {"error": "end date should be YYYY-MM-DD"}
+        return {"error": "end date should be YYYY-MM-DD & a query parameter"}
     
     # convert YYYY-MM-DD to epoch timestamp
     # convert it to int to remove trailing 0 & decimal
-    epochStart = int(datetime.datetime.strptime(glucoseBody.start_date, "%Y-%m-%d").timestamp())
-    epochEnd = int(datetime.datetime.strptime(glucoseBody.end_date, "%Y-%m-%d").timestamp())
+    epochStart = int(datetime.datetime.strptime(start_date, "%Y-%m-%d").timestamp())
+    epochEnd = int(datetime.datetime.strptime(end_date, "%Y-%m-%d").timestamp())
     
     # validate the bearerToken isnt expired
     
@@ -180,5 +178,7 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
                     glucoseData.append(dataPoint)
     except:
         return {"error": "there was an issue parsing the data returned from the api"}
+        
     return glucoseData
-    # print(glucoseData)
+
+
