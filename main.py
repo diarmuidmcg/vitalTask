@@ -1,7 +1,7 @@
 from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel, BaseSettings
-
+import jwt
 # for async await http resquests
 import httpx
 
@@ -10,49 +10,65 @@ from bs4 import BeautifulSoup
 import json
 import re
 
-app = FastAPI()
+# used for validating current date & converting dates to epoch time
+import datetime
+import time
+def validate(date_text):
+    try:
+        datetime.datetime.strptime(date_text, '%Y-%m-%d')
+    except ValueError:
+        raise ValueError("Incorrect data format, should be YYYY-MM-DD")
 
+app = FastAPI()
+# async await for api reqs
 client = httpx.AsyncClient(verify=False)
 
-
-# GLOBAL VARS
-patientId = "3f5e19e1-d667-11ea-a179-0242ac110007"
-professionalId = "43dd94c6-fc1e-11eb-ba23-0242ac110004"
+# body object for glucose api call
+class GlucoseBody(BaseModel):
+    start_date: str
+    end_date: str
+    bearerToken: str
+    patientId: str
+    professionalId: str
 
 # main function that'll return all the data requested from the data pool
 @app.get("/glucose")
-async def get_glucose(start_date: str = "", end_date: str = "", bearerToken: str = ""):
-    bearerToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQzZGQ5NGM2LWZjMWUtMTFlYi1iYTIzLTAyNDJhYzExMDAwNCIsImZpcnN0TmFtZSI6InRhc2siLCJsYXN0TmFtZSI6InRyeXZ0YWlsIiwiY291bnRyeSI6IkdCIiwicmVnaW9uIjoiZXUiLCJyb2xlIjoiaGNwIiwidW5pdHMiOjAsInByYWN0aWNlcyI6W10sImMiOjEsInMiOiJsdiIsImV4cCI6MTY1OTYyMzQ4MH0.Kub6N4RgZ4GdKcBo4gDRvTeyGWr60-AXM86oDDjEm3c"
-
-    # ensure signed in 
-        # if not, prompt user to call /signin endpoint
+async def get_glucose(glucoseBody: GlucoseBody):
     
-    # ensure params includes
-    # if not start_date or not end_date:
-    #     return {"error": "You did not pass in the correct time parameters"}
-    # if not bearerToken:
-    #     return {"error": "You did not pass in a bearerToken"}
     # validate that the start date & end date are the proper YYYY-MM-DD format
     # and that they are all valid numbers / years
+    try:
+        validate(glucoseBody.start_date)
+    except:
+        return {"error": "state date should be YYYY-MM-DD"}
+    try:
+        validate(glucoseBody.end_date)
+    except:
+        return {"error": "end date should be YYYY-MM-DD"}
     
+    # convert YYYY-MM-DD to epoch timestamp
+    # convert it to int to remove trailing 0 & decimal
+    epochStart = int(datetime.datetime.strptime(glucoseBody.start_date, "%Y-%m-%d").timestamp())
+    epochEnd = int(datetime.datetime.strptime(glucoseBody.end_date, "%Y-%m-%d").timestamp())
+    
+    # validate the bearerToken isnt expired
     
     # ensure the data has been loaded
         # if not, prompt user to call the /generate-data endpoint 
     
     
     # search data pool based on parameters passed in
-    data = await query_libre(1650052354, 1650326400, bearerToken)
+    data = await query_libre(epochStart, epochEnd, glucoseBody.bearerToken, glucoseBody.patientId, glucoseBody.professionalId)
 
-    
+    # data = "testing"
     return {"data": data}
     
-async def query_libre(start_date: int, end_date: int, bearerToken: str):
+async def query_libre(start_date: int, end_date: int, bearerToken: str, patientId: str, professionalId: str):
     
-    print("i got here")
     # calc the date today in epoch
-    todayDate = 1659484800
+    todayDate = int(time.time())
     
-    # first thing first is 
+    # create body object
     postReportData={
         "Country":"GB",
         "CultureCode":"en-GB",
@@ -76,52 +92,40 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str):
         "ProfessionalId":professionalId,
         "ClientReportIDs":[5]
         }
+    # convert to json
     jsonData = json.dumps(postReportData)
-    print("i even got here")
+    
     # POST 
     # This generates the overall report
-    
-    print("into async client")
     headers = {'Authorization': 'Bearer ' + bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
     # headers = {'Authorization': bearerToken}
     callback_url = "https://api-eu.libreview.io/reports"
     postReport = await client.post(callback_url, data=jsonData, headers=headers)
     postReportJson = postReport.json()
-    print(postReportJson)
+    # the token thats returned must be used as the session value for the last call
     bearerToken = postReportJson["ticket"]["token"]
     # this url is the next endpoint to call
     channelUrl = postReportJson["data"]["url"]
 
-        
     # GET 
     # This generates the link to retreive the data from numerous reports
-    
     getChannel = await client.get(channelUrl, headers=headers)
     getChannelJson = getChannel.json()
-    print(getChannelJson)
     # this url is the next endpoint to call
     dataIpUrl = getChannelJson["data"]["lp"]
 
-        
     # GET 
     # This generates the links to those reports
-    
     getReports = await client.get(dataIpUrl, headers=headers)
     getReportsJson = getReports.json()
-    print(getReportsJson)
-    print("got to args url")
     # this url is the next endpoint to call
     properReportUrl = getReportsJson["args"]["urls"]["5"]
-    print("made it json")
         
     # GET 
     # This generates the final report as a file that contains the data
-    
     # the endpoint takes a query parameter as the bearerToken
     dataInJavascriptFile = await client.get(properReportUrl+"?session="+bearerToken, headers=headers)
-    print("made it to js file")
 
-    
     # parse html response 
     soup = BeautifulSoup(dataInJavascriptFile.text, 'lxml')
     # get correct script tag
