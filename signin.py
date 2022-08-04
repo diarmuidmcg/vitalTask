@@ -15,7 +15,6 @@ class EnterCodeObject(BaseModel):
     accessCode: int
     bearerToken: str
 
-    
 # sign in function that will pass take a username & password & send it to 
 # LibreView
 @app.post("/signin")
@@ -38,8 +37,8 @@ async def sign_in_user(creds: SignInObject):
         callback_url = "https://api-eu.libreview.io/auth/login"
         initialSignIn = await client.post(callback_url, data=jsonData, headers=headers)
         loginResponse = initialSignIn.json()
-        bearerToken = loginResponse["data"]["authTicket"]
-        verify = loginResponse["step"]
+        bearerToken = loginResponse["data"]["authTicket"]["token"]
+        verify = loginResponse["data"]["step"]
         print(loginResponse)
     except httpx.RequestError as exc:
         return { "error": f"An error occurred while requesting {exc.request.url!r}." }
@@ -65,7 +64,7 @@ async def sign_in_user(creds: SignInObject):
             sendCodeResponse = generateCode.json()
             # this generates a NEW bearerToken as well
             bearerToken = sendCodeResponse["ticket"]["token"]
-            print(sendCodeResponse)
+            # print(sendCodeResponse)
         except httpx.RequestError as exc:
             return { "error": f"An error occurred while requesting {exc.request.url!r}." }
         except httpx.HTTPStatusError as exc:
@@ -80,19 +79,17 @@ async def sign_in_user(creds: SignInObject):
 # sign in function that will pass take a username & password & send it to 
 # LibreView
 @app.post("/enter-code")
-async def sign_in_user(token: EnterCodeObject):
+async def enter_code(token: EnterCodeObject):
     
-    # may need to call this func to set to gb
-    # callback_url = "https://api-eu.libreview.io/config"
-        
     # create body object
     verifyObject={
+        "code": str(token.accessCode),
         "isPrimaryMethod": False,
-        "code": token.accessCode
         }
     # convert to json
     jsonData = json.dumps(verifyObject)
-
+    print(token.bearerToken)
+    print(jsonData)
     try:
         headers = {'Authorization': 'Bearer ' + token.bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
         callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
@@ -106,14 +103,36 @@ async def sign_in_user(token: EnterCodeObject):
     except httpx.HTTPStatusError as exc:
         return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
     except:
-        return {"error": f"Error response {initialSignIn.content} while requesting {callback_url}." }
+        return {"error": f"Error response {finalSignIn.content} while requesting {callback_url}." }
+    
 
+
+    dashboardObject={
+        "filters":[],
+        "columns":[
+            "lastAvailableData",
+            "avgGlucose",
+            "sensorDailyScans",
+            "percentGlucoseInTarget",
+            "libreViewStatus"
+            ],
+        "interval":"14",
+        "view":"Dashboard.allPatients",
+        "count":50,
+        "page":1,
+        "searching":{},
+        "sort":{
+            "desc":False,"key":"firstName"
+        }
+    }
+    # convert to json
+    jsonData = json.dumps(dashboardObject)
 
     # call /dashboard to get the patientIds & information 
     try:
         headers = {'Authorization': 'Bearer ' + bearerToken, "Content-Type":"application/json", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive"}
-        callback_url = "https://api-eu.libreview.io/auth/continue/2fa/result"
-        dashboardData = await client.post(callback_url, headers=headers)
+        callback_url = "https://api-eu.libreview.io/dashboard"
+        dashboardData = await client.post(callback_url, data=jsonData, headers=headers)
         dashboardResponse = dashboardData.json()
         # get patient info
         patients = dashboardResponse["data"]["results"]
@@ -127,7 +146,7 @@ async def sign_in_user(token: EnterCodeObject):
     except httpx.HTTPStatusError as exc:
         return { "error": f"Error response {exc.response.status_code} while requesting {exc.request.url!r}." }
     except:
-        return {"error": f"Error response {initialSignIn.content} while requesting {callback_url}." }
+        return {"error": f"Error response {dashboardData.content} while requesting {callback_url}." }
 
 
     # for each patient, add their information to the db
@@ -144,4 +163,6 @@ async def sign_in_user(token: EnterCodeObject):
         await query_libre(startDate,todayDate,bearerToken,patient,professionalId)
         print("got data for patient " + patient)
 
-    return {"data": creds}
+    return {"data": "finished"}
+
+
