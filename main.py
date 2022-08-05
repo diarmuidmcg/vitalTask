@@ -314,7 +314,7 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
     
     try:
         # parse html response 
-        soup = BeautifulSoup(dataInJavascriptFile.text, 'html', features="lxml")
+        soup = BeautifulSoup(dataInJavascriptFile.text, 'html')
         # get correct script tag
         rows = soup.head.findAll('script')[4::5]
         scriptTag = str(rows[1])
