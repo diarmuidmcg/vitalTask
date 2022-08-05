@@ -27,6 +27,11 @@ class GlucoseDataPoint(SQLModel, table=True):
     timestamp: int
     value: float
     patientId: str
+    
+# create the database
+engine = create_engine("sqlite:///GlucoseData.db")
+SQLModel.metadata.create_all(engine)
+
 
 app = FastAPI()
 
@@ -53,7 +58,6 @@ async def get_glucose(start_date: str, end_date: str):
     epochStart = int(datetime.datetime.strptime(start_date, "%Y-%m-%d").timestamp())
     epochEnd = int(datetime.datetime.strptime(end_date, "%Y-%m-%d").timestamp())
     
-    engine = create_engine("sqlite:///GlucoseData.db")
     # get datapoints within bounds
     with Session(engine) as session:
         statement = select(GlucoseDataPoint).where(GlucoseDataPoint.timestamp > epochStart).where(GlucoseDataPoint.timestamp < epochEnd)
@@ -320,10 +324,6 @@ async def query_libre(start_date: int, end_date: int, bearerToken: str, patientI
         completeObject = search.replace("</script>","").replace(";","")
         # convert the string into json
         object = json.loads(completeObject)
-        
-        # create the database
-        engine = create_engine("sqlite:///GlucoseData.db")
-        SQLModel.metadata.create_all(engine)
         
         # now iterate through Data.Days & get all the glucose data
         # glucoseData = []
