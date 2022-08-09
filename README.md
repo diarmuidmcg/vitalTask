@@ -6,7 +6,7 @@ to run:
 
 - install all packages
   - if theres a `pip3 install` like `npm i` then run that, otherwise
-    `pip3 install typing fastapi pydantic httpx bs4 json re datetime time sqlmodel`
+    `pip3 install typing fastapi pydantic httpx bs4 sqlmodel`
 - run with `uvicorn main:app --reload`
 - with postman (or alternative) query
   POST `http://127.0.0.1:8000/signin`
