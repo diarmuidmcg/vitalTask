@@ -56,6 +56,7 @@ Corners I cut:
   However, I'm not entirely sure if separating routes from code is a common thing with FastAPI
 - Storing database in just a db file (& not using a .env file to store its name)
 - I would have extensive tests on all endpoints, especially storing the username & password as ENV variables and querying /signin
+- When Rui queried the /enter-code endpoint, the /reports LibreView request returns `Error response b'{"message":"MissingRequiredRole:hcp"}\n' while requesting https://api-eu.libreview.io/dashboard.` when he uses HIS credentials. I would test more with other credentials to fix this bug & understand why its occuring.
 
 What I learned throughout this challenge
 
